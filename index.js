@@ -1,41 +1,64 @@
-const express = require('express')
-const app = express()
-const dotenv = require('dotenv')
-dotenv.config()
+// fs is used to read the commands directory and identify our command files.
+const fs = require('node:fs');
+// path helps construct paths to access files and directories.
+const path = require('node:path');
+// Require the necessary discord.js classes
+const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
+const { TOKEN } = require('./config.json');
 
-// The verifyKeyMiddleware is a middleware function that can be used to validate keys in Discord messages.
-// InteractionResponseType is an enumeration in the discord-interactions npm package that defines 
-// the types of responses that can be returned when interacting with a Discord user.
-const { verifyKeyMiddleware, InteractionResponseType } = require('discord-interactions')
+// Create a new client instance
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-const ops = {
-    mail: async function(){
-        console.log(`sending alert mail...`)
-        return 
-    }
+//.commands property to your client instance so that you can access your commands in other files
+// The Collection class extends JavaScript's native Map class, and includes more extensive, useful functionality. 
+// Collection is used to store and efficiently retrieve commands for execution.
+client.commands = new Collection();
+
+// path.join() helps to construct a path to the commands
+const commandsPath = path.join(__dirname, 'commands');
+// The fs.readdirSync() method then reads the path to the directory and returns an array of all the file names it contains
+// Array.filter() removes any non-JavaScript files from the array.
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+for (const file of commandFiles) {
+	const filePath = path.join(commandsPath, file);
+	const command = require(filePath);
+	// Set a new item in the Collection with the key as the command name and the value as the exported module
+	if ('data' in command && 'execute' in command) {
+		client.commands.set(command.data.name, command);
+	} else {
+		console.log(`[WARNING] The command at ${filePath} is missing a required "data" or "execute" property.`);
+	}
 }
 
-// VerifyKeyMiddleware is handling the POST request to the root route ('/')
-// Middleware is being passed the PUBLIC_KEY env variable to validate the key,
-// Will return false if key is incorrect 
-app.post('/', verifyKeyMiddleware(process.env.PUBLIC_KEY), async (req, res) => {
-    // The message variable is being set to the request body
-    const message = req.body;
-    console.log(message)
-    // The name property  of the data object is used to determine the command to be executed
-    let command = message.data.name
-    // the code here calls the ops object passing the command variable as the key
-    await ops[command]()
-
-// This will send a response to the client
-    return res.send({
-        // An enumeration value indicating that the response should be a channel message with source.
-        type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-        // The data being sent is the contents string
-        data: {
-            content: 'Hello there',
-        },
-    });
+// When the client is ready, run this code (only once)
+// We use 'c' for the event parameter to keep it separate from the already defined 'client'
+client.once(Events.ClientReady, c => {
+	console.log(`Ready! Logged in as ${c.user.tag}`);
 });
-app.listen(process.env.PORT || 3000)
 
+// a listener for the Client#event:interactionCreate event that will execute code when your application receives an interaction
+client.on(Events.InteractionCreate, async interaction => {
+	// Make sure to only handle slash commands in this function by making use of the BaseInteraction#isChatInputCommand method 
+	// to exit the handler if another type is encountered.
+	if (!interaction.isChatInputCommand()) return;
+	//console.log(interaction);
+	const command = interaction.client.commands.get(interaction.commandName);
+
+	// If no matching command is found, log an error to the console and ignore the event.
+	if (!command) {
+		console.error(`No command matching ${interaction.commandName} was found.`);
+		return;
+	}
+
+	// In case something goes wrong, catch and log any error to the console.
+	try {
+		await command.execute(interaction);
+	} catch (error) {
+		console.error(error);
+		await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+	}
+});
+
+// Log in to Discord with your client's token
+client.login(TOKEN);
