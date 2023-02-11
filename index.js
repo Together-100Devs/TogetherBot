@@ -9,6 +9,8 @@ dotenv.config();
 const TOKEN = process.env.TOKEN
 
 // Create a new client instance
+// the bot is subscribing to the Guilds intent, which allows it to receive information about the guilds (servers) 
+// it is a member of. This includes things like guild name, member count, and channel information.
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 //.commands property to your client instance so that you can access your commands in other files
