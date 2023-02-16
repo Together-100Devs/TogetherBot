@@ -1,43 +1,30 @@
-const { REST } = require('@discordjs/rest')
-const { Routes } = require('discord-api-types/v9')
-const fs = require('fs')
-
 const dotenv = require('dotenv');
 dotenv.config();
+const { REST, Routes } = require('discord.js')
 
-//const guildId = process.env.guildId
-const clientId = process.env.clientId
+const commands = [
+    {
+        name: 'embed',
+        description: 'Sends an embed!'
+    },
+];
 
-module.exports = (client) => {
-    client.handleCommands = async (commandFolders, path) => {
-        client.commandArray = [];
-        for (const folder of commandFolders) {
-            const commandFiles = fs.readFileSync(`${path}/${folder}`).filter(file => file.endsWith('.js'));
-            for (const file of commandFiles) {
-                const command = require(`../commands/${folder}/${file}`);
-                client.commands.set(command.data.name, command);
-                client.commandArray.push(command.data.toJSON())
-            }
-        }
+const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
-        const rest = new REST ({
-            version: '10'
-        }).setToken(process.env.TOKEN);
+(async () => {
+    try {
 
-        (async () => {
-            try {
-                console.log(`Started refreshing ${client.commandArray.length} application (/) commands.`);
+        console.log(`Registering ${commands.length} slash commands`)
 
-                const data = await rest.put(
-                    Routes.applicationCommands(clientId), {
-                        body: client.commandArray
-                    },
-                );
+        await rest.put(
+            Routes.applicationGuildCommands(process.env.clientId, process.env.guildId),
+            { body:commands }
+        )
 
-                console.log(`Successfully reloaded ${data.length} application (/) commands.`);
-            } catch (error) {
-                console.log(error);
-            }
-        })();
-    };
-};
+        console.log(`Slash commands were registered successfully!`)
+    } catch (error) {
+        console.log(`There was an error: ${error}`)
+    }
+})();
+
+// node functions/handleCommands
